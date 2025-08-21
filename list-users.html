@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Admin - Users</title>
+	<link rel="stylesheet" href="admin.css">
+	<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+	<!-- Supabase SDK + site auth (for guarding the page) -->
+	<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
+	<script src="../auth.js" defer></script>
+</head>
+
+<body>
+	<div class="container">
+		<div class="topbar">
+			<a href="add-user.html">Add User</a>
+			<a href="../index.html">Back to Site</a>
+		</div>
+		<div class="card">
+			<div class="header">
+				<h1>Users</h1>
+				<p>List of all users</p>
+			</div>
+			<table>
+				<thead>
+					<tr>
+						<th>Email</th>
+						<th>User ID</th>
+						<th style="width: 140px;">Action</th>
+					</tr>
+				</thead>
+				<tbody id="usersBody">
+					<tr><td colspan="3">Loading...</td></tr>
+				</tbody>
+			</table>
+			<div id="message" class="message"></div>
+		</div>
+	</div>
+
+	<script>
+		// Configure your deployed backend base URL here (do NOT put service role key in frontend)
+		const ADMIN_API_BASE_URL = "https://your-deployed-backend.example.com"; // e.g., https://your-vercel-app.vercel.app
+
+		async function loadUsers(session) {
+			const token = session?.access_token;
+			const tbody = document.getElementById('usersBody');
+			const message = document.getElementById('message');
+			tbody.innerHTML = '<tr><td colspan="3">Loading...</td></tr>';
+			try {
+				const res = await fetch(`${ADMIN_API_BASE_URL}/admin/list-users`, {
+					headers: { 'Authorization': `Bearer ${token}` }
+				});
+				const data = await res.json();
+				if (!res.ok) {
+					message.textContent = data.error || 'Failed to fetch users';
+					tbody.innerHTML = '<tr><td colspan="3">Error loading users</td></tr>';
+					return;
+				}
+				renderUsers(data.users || []);
+			} catch (err) {
+				message.textContent = 'Network error while fetching users';
+				tbody.innerHTML = '<tr><td colspan="3">Network error</td></tr>';
+			}
+		}
+
+		function renderUsers(users) {
+			const tbody = document.getElementById('usersBody');
+			if (!users.length) {
+				tbody.innerHTML = '<tr><td colspan="3">No users found</td></tr>';
+				return;
+			}
+			tbody.innerHTML = '';
+			users.forEach(u => {
+				const tr = document.createElement('tr');
+				const email = (u.email) || (u.user?.email) || '';
+				const id = (u.id) || (u.user?.id) || '';
+				tr.innerHTML = `
+					<td>${email}</td>
+					<td>${id}</td>
+					<td>
+						<div class="table-actions">
+							<button class="btn btn-danger" data-id="${id}">Delete</button>
+						</div>
+					</td>
+				`;
+				tbody.appendChild(tr);
+			});
+
+			tbody.querySelectorAll('button[data-id]').forEach(btn => {
+				btn.addEventListener('click', async (e) => {
+					const id = e.currentTarget.getAttribute('data-id');
+					if (!confirm('Delete this user?')) return;
+					const session = await window.auth.getSession();
+					const token = session?.access_token;
+					try {
+						const res = await fetch(`${ADMIN_API_BASE_URL}/admin/delete-user`, {
+							method: 'POST',
+							headers: {
+								'Content-Type': 'application/json',
+								'Authorization': `Bearer ${token}`
+							},
+							body: JSON.stringify({ id })
+						});
+						const data = await res.json();
+						if (!res.ok) {
+							alert(data.error || 'Failed to delete user');
+							return;
+						}
+						await loadUsers(session);
+					} catch (err) {
+						alert('Network error while deleting user');
+					}
+				});
+			});
+		}
+
+		document.addEventListener('DOMContentLoaded', async function () {
+			// Require auth and admin role
+			if (!(window.auth && typeof window.auth.requireAuth === 'function')) return;
+			const ok = await window.auth.requireAuth();
+			if (!ok) return;
+			const session = await window.auth.getSession();
+			const role = session?.user?.user_metadata?.role;
+			if (role !== 'admin') {
+				alert('Access denied: Admins only');
+				window.location.href = '../index.html';
+				return;
+			}
+
+			await loadUsers(session);
+		});
+	</script>
+</body>
+
+</html>
+

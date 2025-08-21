@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Admin - Add User</title>
+	<link rel="stylesheet" href="admin.css">
+	<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+	<!-- Supabase SDK + site auth (for guarding the page) -->
+	<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
+	<script src="../auth.js" defer></script>
+</head>
+
+<body>
+	<div class="container">
+		<div class="topbar">
+			<a href="list-users.html">View Users</a>
+			<a href="../index.html">Back to Site</a>
+		</div>
+		<div class="card">
+			<div class="header">
+				<h1>Add New User</h1>
+				<p>Create a new user account (email + password)</p>
+			</div>
+			<form id="addUserForm">
+				<div class="form-row">
+					<div>
+						<label for="email">Email</label>
+						<input type="email" id="email" placeholder="user@example.com" required>
+					</div>
+					<div>
+						<label for="password">Password</label>
+						<input type="password" id="password" placeholder="••••••••" required>
+					</div>
+				</div>
+				<div class="actions">
+					<button type="submit" class="btn">Add User</button>
+					<button type="button" id="resetBtn" class="btn btn-secondary">Reset</button>
+				</div>
+				<div id="message" class="message"></div>
+			</form>
+		</div>
+	</div>
+
+	<script>
+		// Configure your deployed backend base URL here (do NOT put service role key in frontend)
+		const ADMIN_API_BASE_URL = "https://your-deployed-backend.example.com"; // e.g., https://your-vercel-app.vercel.app
+
+		document.addEventListener('DOMContentLoaded', async function () {
+			// Require auth and admin role
+			if (!(window.auth && typeof window.auth.requireAuth === 'function')) return;
+			const ok = await window.auth.requireAuth();
+			if (!ok) return;
+			const session = await window.auth.getSession();
+			const role = session?.user?.user_metadata?.role;
+			if (role !== 'admin') {
+				alert('Access denied: Admins only');
+				window.location.href = '../index.html';
+				return;
+			}
+
+			const form = document.getElementById('addUserForm');
+			const message = document.getElementById('message');
+			document.getElementById('resetBtn').addEventListener('click', () => {
+				document.getElementById('email').value = '';
+				document.getElementById('password').value = '';
+				message.textContent = '';
+			});
+
+			form.addEventListener('submit', async (e) => {
+				e.preventDefault();
+				message.textContent = '';
+				const email = document.getElementById('email').value.trim();
+				const password = document.getElementById('password').value;
+				if (!email || !password) {
+					message.textContent = 'Email and password are required';
+					return;
+				}
+
+				const token = session?.access_token;
+				try {
+					const res = await fetch(`${ADMIN_API_BASE_URL}/admin/create-user`, {
+						method: 'POST',
+						headers: {
+							'Content-Type': 'application/json',
+							'Authorization': `Bearer ${token}`
+						},
+						body: JSON.stringify({ email, password, user_metadata: { role: 'user' } })
+					});
+					const data = await res.json();
+					if (!res.ok) {
+						message.textContent = data.error || 'Failed to create user';
+						return;
+					}
+					message.textContent = 'User created successfully';
+					form.reset();
+				} catch (err) {
+					message.textContent = 'Network error while creating user';
+				}
+			});
+		});
+	</script>
+</body>
+
+</html>
+
